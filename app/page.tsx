@@ -58,10 +58,20 @@ export default function Home() {
   // Geofence bounds state with localStorage persistence
   const [geofenceBounds, setGeofenceBounds] = useState<GeofenceBounds>(DEFAULT_BOUNDS)
 
-  // Vessel passage history with localStorage persistence
+  // Vessel passage history from API + localStorage
   const [passages, setPassages] = useState<VesselPassage[]>([])
 
-  // Load bounds and passages from localStorage on mount
+  // Fetch passages from backend API
+  const { data: passagesData } = useSWR<{ passages: VesselPassage[]; source: string }>(
+    '/api/passages',
+    fetcher,
+    {
+      refreshInterval: 60000, // Refresh every minute
+      revalidateOnFocus: true,
+    }
+  )
+
+  // Load bounds and passages on mount
   useEffect(() => {
     const savedBounds = localStorage.getItem('geofenceBounds')
     if (savedBounds) {
@@ -72,20 +82,59 @@ export default function Home() {
       }
     }
 
+    // Load localStorage passages for backward compatibility
     const savedPassages = localStorage.getItem('vesselPassages')
     if (savedPassages) {
       try {
-        setPassages(JSON.parse(savedPassages))
+        const localPassages = JSON.parse(savedPassages)
+        setPassages(localPassages)
       } catch (e) {
         console.error('Failed to parse saved passages:', e)
       }
     }
   }, [])
 
-  // Save bounds to localStorage when changed
-  const handleBoundsChange = (newBounds: GeofenceBounds) => {
+  // Merge API passages with localStorage passages
+  useEffect(() => {
+    if (passagesData?.passages) {
+      setPassages(prev => {
+        // Merge API passages with localStorage passages
+        const apiPassages = passagesData.passages
+        const allPassages = [...prev, ...apiPassages]
+
+        // Remove duplicates based on mmsi + timestamp + type
+        const uniquePassages = allPassages.filter((passage, index, self) =>
+          index === self.findIndex(p =>
+            p.mmsi === passage.mmsi &&
+            p.timestamp === passage.timestamp &&
+            p.type === passage.type
+          )
+        )
+
+        // Sort by timestamp (newest first)
+        uniquePassages.sort((a, b) => b.timestamp - a.timestamp)
+
+        return uniquePassages
+      })
+    }
+  }, [passagesData])
+
+  // Save bounds to localStorage and API when changed
+  const handleBoundsChange = async (newBounds: GeofenceBounds) => {
     setGeofenceBounds(newBounds)
     localStorage.setItem('geofenceBounds', JSON.stringify(newBounds))
+
+    // Sync bounds to API for cron job
+    try {
+      await fetch('/api/passages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bounds: newBounds }),
+      })
+    } catch (error) {
+      console.error('Failed to sync bounds to API:', error)
+    }
+
     // Reset tracking when bounds change
     previousVesselsRef.current = new Set()
     isFirstLoadRef.current = true

@@ -19,7 +19,7 @@ Vercel vil automatisk:
 - Legge til miljøvariabler (`KV_REST_API_URL`, `KV_REST_API_TOKEN`)
 - Disse blir tilgjengelige i API-routes
 
-## Steg 3: Installer pakke
+## Steg 3: Installer pakke (allerede gjort)
 
 ```bash
 npm install @vercel/kv
