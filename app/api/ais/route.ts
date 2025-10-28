@@ -82,8 +82,8 @@ const TROMSO_BOUNDS = {
 let cachedToken: { token: string; expires: number } | null = null
 
 async function getBarentswatchToken(): Promise<string | null> {
-  const clientId = process.env.BARENTSWATCH_CLIENT_ID
-  const clientSecret = process.env.BARENTSWATCH_CLIENT_SECRET
+  const clientId = process.env.BARENTSWATCH_CLIENT_ID?.trim()
+  const clientSecret = process.env.BARENTSWATCH_CLIENT_SECRET?.trim()
 
   if (!clientId || !clientSecret) {
     return null
