@@ -21,12 +21,59 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-// Custom vessel icon
+// Minions-style vessel icon
+const minionSvg = `
+<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+  <!-- Body (yellow capsule) -->
+  <ellipse cx="16" cy="22" rx="12" ry="16" fill="#FFD700"/>
+
+  <!-- Overalls (blue) -->
+  <rect x="6" y="22" width="20" height="16" rx="2" fill="#4169E1"/>
+  <circle cx="12" cy="27" r="2" fill="#2F4F7F"/>
+  <circle cx="20" cy="27" r="2" fill="#2F4F7F"/>
+  <line x1="12" y1="24" x2="12" y2="38" stroke="#2F4F7F" stroke-width="2"/>
+  <line x1="20" y1="24" x2="20" y2="38" stroke="#2F4F7F" stroke-width="2"/>
+
+  <!-- Goggle strap (black) -->
+  <rect x="4" y="10" width="24" height="3" rx="1.5" fill="#333"/>
+
+  <!-- Goggle (silver/grey) -->
+  <ellipse cx="16" cy="12" rx="8" ry="6" fill="#C0C0C0" stroke="#666" stroke-width="1"/>
+
+  <!-- Eye (white) -->
+  <circle cx="16" cy="12" r="5" fill="#FFF"/>
+
+  <!-- Iris (brown) -->
+  <circle cx="16" cy="12" r="3" fill="#8B4513"/>
+
+  <!-- Pupil (black) -->
+  <circle cx="16" cy="12" r="1.5" fill="#000"/>
+
+  <!-- Shine in eye -->
+  <circle cx="17" cy="11" r="1" fill="#FFF" opacity="0.8"/>
+
+  <!-- Hair (black strands) -->
+  <line x1="14" y1="6" x2="14" y2="2" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="16" y1="5" x2="16" y2="1" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="18" y1="6" x2="18" y2="2" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Mouth (smile) -->
+  <path d="M 12 16 Q 16 19 20 16" stroke="#333" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Arms -->
+  <ellipse cx="4" cy="24" rx="3" ry="2" fill="#FFD700"/>
+  <ellipse cx="28" cy="24" rx="3" ry="2" fill="#FFD700"/>
+
+  <!-- Gloves (black) -->
+  <circle cx="3" cy="24" r="2" fill="#333"/>
+  <circle cx="29" cy="24" r="2" fill="#333"/>
+</svg>
+`
 const vesselIcon = new L.Icon({
-  iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQgMTlWMTZIMjBWMTlDMjAgMTkuNTUgMTkuNTUgMjAgMTkgMjBINUM0LjQ1IDIwIDQgMTkuNTUgNCAxOVoiIGZpbGw9IiMyMTk2RjMiLz4KPHBhdGggZD0iTTYgMTVWMTBMMTIgNEwxOCAxMFYxNUg2WiIgZmlsbD0iIzIxOTZGMyIvPgo8L3N2Zz4=',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -12],
+  iconUrl: 'data:image/svg+xml;base64,' + btoa(minionSvg),
+  iconSize: [32, 40],
+  iconAnchor: [16, 40],
+  popupAnchor: [0, -40],
 })
 
 function formatSpeed(speed: number): string {
