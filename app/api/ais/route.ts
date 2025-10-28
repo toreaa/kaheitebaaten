@@ -165,9 +165,9 @@ async function fetchLiveAIS(): Promise<AISVessel[] | null> {
     const vessels: AISVessel[] = []
 
     for (const vessel of data) {
-      // Extract position from geometry
-      const lat = vessel.geometry?.coordinates?.[1]
-      const lon = vessel.geometry?.coordinates?.[0]
+      // Extract position directly from vessel object
+      const lat = vessel.latitude
+      const lon = vessel.longitude
 
       if (!lat || !lon || !isInBounds(lat, lon)) {
         continue
@@ -183,7 +183,7 @@ async function fetchLiveAIS(): Promise<AISVessel[] | null> {
         course: vessel.courseOverGround || 0,
         heading: vessel.trueHeading || vessel.courseOverGround || 0,
         timestamp: vessel.msgtime || new Date().toISOString(),
-        shipType: vessel.shipType || undefined,
+        shipType: vessel.shipType?.toString() || undefined,
         destination: vessel.destination || undefined,
         eta: vessel.eta || undefined,
       })
