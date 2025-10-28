@@ -1,0 +1,7 @@
+{
+  "regions": ["arn1"],
+  "env": {
+    "NEXT_PUBLIC_MAP_CENTER_LAT": "69.65",
+    "NEXT_PUBLIC_MAP_CENTER_LNG": "18.96"
+  }
+}
