@@ -54,17 +54,17 @@ interface AISMapProps {
   geofenceBounds: GeofenceBounds
 }
 
-function MapUpdater({ vessels }: { vessels: AISVessel[] }) {
+function MapUpdater({ geofenceBounds }: { geofenceBounds: GeofenceBounds }) {
   const map = useMap()
 
   useEffect(() => {
-    if (vessels.length > 0) {
-      const bounds = L.latLngBounds(
-        vessels.map((v) => [v.latitude, v.longitude])
-      )
-      map.fitBounds(bounds, { padding: [50, 50] })
-    }
-  }, [vessels, map])
+    // Center map on geofence bounds
+    const bounds = L.latLngBounds(
+      [geofenceBounds.latMin, geofenceBounds.lonMin],
+      [geofenceBounds.latMax, geofenceBounds.lonMax]
+    )
+    map.fitBounds(bounds, { padding: [50, 50] })
+  }, [geofenceBounds, map])
 
   return null
 }
@@ -98,13 +98,10 @@ export default function AISMap({ vessels, source, geofenceBounds }: AISMapProps)
     )
   }
 
-  const centerLat = parseFloat(
-    process.env.NEXT_PUBLIC_MAP_CENTER_LAT || '69.65'
-  )
-  const centerLng = parseFloat(
-    process.env.NEXT_PUBLIC_MAP_CENTER_LNG || '18.96'
-  )
-  const zoom = parseInt(process.env.NEXT_PUBLIC_MAP_ZOOM || '12')
+  // Calculate center of geofence bounds
+  const centerLat = (geofenceBounds.latMin + geofenceBounds.latMax) / 2
+  const centerLng = (geofenceBounds.lonMin + geofenceBounds.lonMax) / 2
+  const zoom = 12
 
   return (
     <div style={{ position: 'relative', height: '100vh' }}>
@@ -147,7 +144,7 @@ export default function AISMap({ vessels, source, geofenceBounds }: AISMapProps)
             dashArray: '10, 10',
           }}
         />
-        <MapUpdater vessels={vessels} />
+        <MapUpdater geofenceBounds={geofenceBounds} />
         {vessels.map((vessel) => (
           <Marker
             key={vessel.mmsi}
