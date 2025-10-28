@@ -6,7 +6,9 @@ import useSWR from 'swr'
 import type { AISResponse } from '@/types/ais'
 import GeofenceNotification, { type VesselNotification } from '@/components/GeofenceNotification'
 import GeofenceSettings from '@/components/GeofenceSettings'
+import HighScorePanel from '@/components/HighScorePanel'
 import type { GeofenceBounds } from '@/components/AISMap'
+import type { VesselPassage } from '@/types/passage'
 
 // Default Tromsøysundet bounds
 const DEFAULT_BOUNDS: GeofenceBounds = {
@@ -56,14 +58,26 @@ export default function Home() {
   // Geofence bounds state with localStorage persistence
   const [geofenceBounds, setGeofenceBounds] = useState<GeofenceBounds>(DEFAULT_BOUNDS)
 
-  // Load bounds from localStorage on mount
+  // Vessel passage history with localStorage persistence
+  const [passages, setPassages] = useState<VesselPassage[]>([])
+
+  // Load bounds and passages from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('geofenceBounds')
-    if (saved) {
+    const savedBounds = localStorage.getItem('geofenceBounds')
+    if (savedBounds) {
       try {
-        setGeofenceBounds(JSON.parse(saved))
+        setGeofenceBounds(JSON.parse(savedBounds))
       } catch (e) {
         console.error('Failed to parse saved bounds:', e)
+      }
+    }
+
+    const savedPassages = localStorage.getItem('vesselPassages')
+    if (savedPassages) {
+      try {
+        setPassages(JSON.parse(savedPassages))
+      } catch (e) {
+        console.error('Failed to parse saved passages:', e)
       }
     }
   }, [])
@@ -108,7 +122,42 @@ export default function Home() {
       mmsi => !currentMMSIs.has(mmsi)
     )
 
-    // Show notification for entering vessels
+    // Track all passages (both entering and leaving)
+    const newPassages: VesselPassage[] = []
+
+    // Log entering vessels
+    entered.forEach(mmsi => {
+      const vessel = vesselsInBounds.find(v => v.mmsi === mmsi)
+      if (vessel) {
+        newPassages.push({
+          mmsi: vessel.mmsi,
+          vesselName: vessel.name,
+          timestamp: Date.now(),
+          type: 'enter',
+        })
+      }
+    })
+
+    // Log leaving vessels
+    left.forEach(mmsi => {
+      newPassages.push({
+        mmsi,
+        vesselName: `MMSI ${mmsi}`, // We don't have the name for vessels that left
+        timestamp: Date.now(),
+        type: 'exit',
+      })
+    })
+
+    // Update passages state and localStorage
+    if (newPassages.length > 0) {
+      setPassages(prev => {
+        const updated = [...prev, ...newPassages]
+        localStorage.setItem('vesselPassages', JSON.stringify(updated))
+        return updated
+      })
+    }
+
+    // Show notification for first entering vessel
     if (entered.length > 0) {
       const vessel = vesselsInBounds.find(v => v.mmsi === entered[0])
       if (vessel) {
@@ -121,9 +170,8 @@ export default function Home() {
         })
       }
     }
-    // Show notification for leaving vessels (prioritize entering if both)
+    // Show notification for first leaving vessel (prioritize entering if both)
     else if (left.length > 0) {
-      // Find vessel name from previous data if possible
       setNotification({
         id: `exit-${left[0]}-${Date.now()}`,
         type: 'exit',
@@ -196,6 +244,7 @@ export default function Home() {
       <AISMap vessels={data.vessels} source={data.source} geofenceBounds={geofenceBounds} />
       <GeofenceNotification notification={notification} />
       <GeofenceSettings bounds={geofenceBounds} onBoundsChange={handleBoundsChange} />
+      <HighScorePanel passages={passages} />
     </>
   )
 }
