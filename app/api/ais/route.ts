@@ -70,55 +70,128 @@ const MOCK_VESSELS: AISVessel[] = [
   },
 ]
 
-async function fetchLiveAIS(): Promise<AISVessel[] | null> {
-  const apiKey = process.env.AIS_API_KEY
+// Tromsøysundet bounds
+const TROMSO_BOUNDS = {
+  latMin: 69.62,
+  latMax: 69.68,
+  lonMin: 18.90,
+  lonMax: 19.02,
+}
 
-  if (!apiKey) {
+// Cache token to avoid fetching on every request (tokens are valid for 1 hour)
+let cachedToken: { token: string; expires: number } | null = null
+
+async function getBarentswatchToken(): Promise<string | null> {
+  const clientId = process.env.BARENTSWATCH_CLIENT_ID
+  const clientSecret = process.env.BARENTSWATCH_CLIENT_SECRET
+
+  if (!clientId || !clientSecret) {
     return null
   }
 
+  // Return cached token if still valid (with 5 min buffer)
+  if (cachedToken && cachedToken.expires > Date.now() + 300000) {
+    return cachedToken.token
+  }
+
   try {
-    // Example for AISHub or similar service
-    // Adjust based on your actual AIS data provider
-    const bounds = {
-      latMin: 69.62,
-      latMax: 69.68,
-      lonMin: 18.90,
-      lonMax: 19.02,
-    }
-
-    const url = `https://data.aishub.net/ws.php?username=${apiKey}&format=1&output=json&compress=0&latmin=${bounds.latMin}&latmax=${bounds.latMax}&lonmin=${bounds.lonMin}&lonmax=${bounds.lonMax}`
-
-    const response = await fetch(url, {
+    const response = await fetch('https://id.barentswatch.no/connect/token', {
+      method: 'POST',
       headers: {
-        'User-Agent': 'kaheitebaaten-app',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: 'ais',
+      }),
     })
 
     if (!response.ok) {
-      console.error('AIS API error:', response.status)
+      console.error('Barentswatch token error:', response.status)
       return null
     }
 
     const data = await response.json()
 
-    // Transform the response based on your API provider's format
-    // This is a generic example - adjust field names as needed
-    return data.map((vessel: any) => ({
-      mmsi: vessel.MMSI,
-      name: vessel.NAME || 'Unknown',
-      latitude: parseFloat(vessel.LATITUDE),
-      longitude: parseFloat(vessel.LONGITUDE),
-      speed: parseFloat(vessel.SPEED) || 0,
-      course: parseFloat(vessel.COURSE) || 0,
-      heading: parseFloat(vessel.HEADING) || 0,
-      timestamp: vessel.TIME || new Date().toISOString(),
-      shipType: vessel.TYPE,
-      destination: vessel.DESTINATION,
-      eta: vessel.ETA,
-    }))
+    // Cache the token
+    cachedToken = {
+      token: data.access_token,
+      expires: Date.now() + (data.expires_in * 1000),
+    }
+
+    return data.access_token
   } catch (error) {
-    console.error('Error fetching live AIS data:', error)
+    console.error('Error fetching Barentswatch token:', error)
+    return null
+  }
+}
+
+function isInBounds(lat: number, lon: number): boolean {
+  return (
+    lat >= TROMSO_BOUNDS.latMin &&
+    lat <= TROMSO_BOUNDS.latMax &&
+    lon >= TROMSO_BOUNDS.lonMin &&
+    lon <= TROMSO_BOUNDS.lonMax
+  )
+}
+
+async function fetchLiveAIS(): Promise<AISVessel[] | null> {
+  const token = await getBarentswatchToken()
+
+  if (!token) {
+    return null
+  }
+
+  try {
+    const response = await fetch(
+      'https://live.ais.barentswatch.no/v1/latest/combined',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    )
+
+    if (!response.ok) {
+      console.error('Barentswatch AIS API error:', response.status)
+      return null
+    }
+
+    const data = await response.json()
+
+    // Filter and transform vessels in Tromsøysundet area
+    const vessels: AISVessel[] = []
+
+    for (const vessel of data) {
+      // Extract position from geometry
+      const lat = vessel.geometry?.coordinates?.[1]
+      const lon = vessel.geometry?.coordinates?.[0]
+
+      if (!lat || !lon || !isInBounds(lat, lon)) {
+        continue
+      }
+
+      // Map Barentswatch data to our format
+      vessels.push({
+        mmsi: vessel.mmsi || 0,
+        name: vessel.name || 'Unknown',
+        latitude: lat,
+        longitude: lon,
+        speed: vessel.speedOverGround || 0,
+        course: vessel.courseOverGround || 0,
+        heading: vessel.trueHeading || vessel.courseOverGround || 0,
+        timestamp: vessel.msgtime || new Date().toISOString(),
+        shipType: vessel.shipType || undefined,
+        destination: vessel.destination || undefined,
+        eta: vessel.eta || undefined,
+      })
+    }
+
+    return vessels.length > 0 ? vessels : null
+  } catch (error) {
+    console.error('Error fetching live AIS data from Barentswatch:', error)
     return null
   }
 }
