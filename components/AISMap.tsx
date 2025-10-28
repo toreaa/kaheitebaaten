@@ -6,11 +6,12 @@ import L from 'leaflet'
 import type { AISVessel } from '@/types/ais'
 import 'leaflet/dist/leaflet.css'
 
-// Tromsøysundet geofence bounds
-const GEOFENCE_BOUNDS: [[number, number], [number, number]] = [
-  [69.62, 18.90], // Southwest corner
-  [69.68, 19.02], // Northeast corner
-]
+export interface GeofenceBounds {
+  latMin: number
+  latMax: number
+  lonMin: number
+  lonMax: number
+}
 
 // Fix for default markers in Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -50,6 +51,7 @@ function formatTimestamp(timestamp: string): string {
 interface AISMapProps {
   vessels: AISVessel[]
   source: 'live' | 'mock'
+  geofenceBounds: GeofenceBounds
 }
 
 function MapUpdater({ vessels }: { vessels: AISVessel[] }) {
@@ -67,8 +69,14 @@ function MapUpdater({ vessels }: { vessels: AISVessel[] }) {
   return null
 }
 
-export default function AISMap({ vessels, source }: AISMapProps) {
+export default function AISMap({ vessels, source, geofenceBounds }: AISMapProps) {
   const [mounted, setMounted] = useState(false)
+
+  // Convert GeofenceBounds to Leaflet LatLngBounds format
+  const leafletBounds: [[number, number], [number, number]] = [
+    [geofenceBounds.latMin, geofenceBounds.lonMin], // Southwest corner
+    [geofenceBounds.latMax, geofenceBounds.lonMax], // Northeast corner
+  ]
 
   useEffect(() => {
     setMounted(true)
@@ -130,7 +138,7 @@ export default function AISMap({ vessels, source }: AISMapProps) {
         />
         {/* Geofence area visualization */}
         <Rectangle
-          bounds={GEOFENCE_BOUNDS}
+          bounds={leafletBounds}
           pathOptions={{
             color: '#3b82f6',
             weight: 3,

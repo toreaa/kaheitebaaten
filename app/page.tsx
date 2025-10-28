@@ -5,6 +5,16 @@ import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import type { AISResponse } from '@/types/ais'
 import GeofenceNotification, { type VesselNotification } from '@/components/GeofenceNotification'
+import GeofenceSettings from '@/components/GeofenceSettings'
+import type { GeofenceBounds } from '@/components/AISMap'
+
+// Default Tromsøysundet bounds
+const DEFAULT_BOUNDS: GeofenceBounds = {
+  latMin: 69.62,
+  latMax: 69.68,
+  lonMin: 18.90,
+  lonMax: 19.02,
+}
 
 // Dynamically import the map component (no SSR due to Leaflet)
 const AISMap = dynamic(() => import('@/components/AISMap'), {
@@ -43,11 +53,43 @@ export default function Home() {
   const previousVesselsRef = useRef<Set<number>>(new Set())
   const isFirstLoadRef = useRef(true)
 
+  // Geofence bounds state with localStorage persistence
+  const [geofenceBounds, setGeofenceBounds] = useState<GeofenceBounds>(DEFAULT_BOUNDS)
+
+  // Load bounds from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('geofenceBounds')
+    if (saved) {
+      try {
+        setGeofenceBounds(JSON.parse(saved))
+      } catch (e) {
+        console.error('Failed to parse saved bounds:', e)
+      }
+    }
+  }, [])
+
+  // Save bounds to localStorage when changed
+  const handleBoundsChange = (newBounds: GeofenceBounds) => {
+    setGeofenceBounds(newBounds)
+    localStorage.setItem('geofenceBounds', JSON.stringify(newBounds))
+    // Reset tracking when bounds change
+    previousVesselsRef.current = new Set()
+    isFirstLoadRef.current = true
+  }
+
   // Track vessels entering/leaving the geofenced area
   useEffect(() => {
     if (!data?.vessels) return
 
-    const currentMMSIs = new Set(data.vessels.map(v => v.mmsi))
+    // Filter vessels within current geofence bounds
+    const vesselsInBounds = data.vessels.filter(v =>
+      v.latitude >= geofenceBounds.latMin &&
+      v.latitude <= geofenceBounds.latMax &&
+      v.longitude >= geofenceBounds.lonMin &&
+      v.longitude <= geofenceBounds.lonMax
+    )
+
+    const currentMMSIs = new Set(vesselsInBounds.map(v => v.mmsi))
 
     // Skip notifications on first load
     if (isFirstLoadRef.current) {
@@ -68,7 +110,7 @@ export default function Home() {
 
     // Show notification for entering vessels
     if (entered.length > 0) {
-      const vessel = data.vessels.find(v => v.mmsi === entered[0])
+      const vessel = vesselsInBounds.find(v => v.mmsi === entered[0])
       if (vessel) {
         setNotification({
           id: `enter-${vessel.mmsi}-${Date.now()}`,
@@ -93,7 +135,7 @@ export default function Home() {
 
     // Update previous vessels
     previousVesselsRef.current = currentMMSIs
-  }, [data])
+  }, [data, geofenceBounds])
 
   if (error) {
     return (
@@ -151,8 +193,9 @@ export default function Home() {
 
   return (
     <>
-      <AISMap vessels={data.vessels} source={data.source} />
+      <AISMap vessels={data.vessels} source={data.source} geofenceBounds={geofenceBounds} />
       <GeofenceNotification notification={notification} />
+      <GeofenceSettings bounds={geofenceBounds} onBoundsChange={handleBoundsChange} />
     </>
   )
 }
