@@ -1,10 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Rectangle, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { AISVessel } from '@/types/ais'
 import 'leaflet/dist/leaflet.css'
+
+// Tromsøysundet geofence bounds
+const GEOFENCE_BOUNDS: [[number, number], [number, number]] = [
+  [69.62, 18.90], // Southwest corner
+  [69.68, 19.02], // Northeast corner
+]
 
 // Fix for default markers in Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -121,6 +127,17 @@ export default function AISMap({ vessels, source }: AISMapProps) {
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {/* Geofence area visualization */}
+        <Rectangle
+          bounds={GEOFENCE_BOUNDS}
+          pathOptions={{
+            color: '#3b82f6',
+            weight: 3,
+            opacity: 0.8,
+            fillOpacity: 0.1,
+            dashArray: '10, 10',
+          }}
         />
         <MapUpdater vessels={vessels} />
         {vessels.map((vessel) => (
