@@ -1,9 +1,10 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import type { AISResponse } from '@/types/ais'
+import GeofenceNotification, { type VesselNotification } from '@/components/GeofenceNotification'
 
 // Dynamically import the map component (no SSR due to Leaflet)
 const AISMap = dynamic(() => import('@/components/AISMap'), {
@@ -37,6 +38,62 @@ export default function Home() {
       revalidateOnReconnect: true,
     }
   )
+
+  const [notification, setNotification] = useState<VesselNotification | null>(null)
+  const previousVesselsRef = useRef<Set<number>>(new Set())
+  const isFirstLoadRef = useRef(true)
+
+  // Track vessels entering/leaving the geofenced area
+  useEffect(() => {
+    if (!data?.vessels) return
+
+    const currentMMSIs = new Set(data.vessels.map(v => v.mmsi))
+
+    // Skip notifications on first load
+    if (isFirstLoadRef.current) {
+      previousVesselsRef.current = currentMMSIs
+      isFirstLoadRef.current = false
+      return
+    }
+
+    // Find vessels that entered (new MMSIs)
+    const entered = Array.from(currentMMSIs).filter(
+      mmsi => !previousVesselsRef.current.has(mmsi)
+    )
+
+    // Find vessels that left (old MMSIs not in current)
+    const left = Array.from(previousVesselsRef.current).filter(
+      mmsi => !currentMMSIs.has(mmsi)
+    )
+
+    // Show notification for entering vessels
+    if (entered.length > 0) {
+      const vessel = data.vessels.find(v => v.mmsi === entered[0])
+      if (vessel) {
+        setNotification({
+          id: `enter-${vessel.mmsi}-${Date.now()}`,
+          type: 'enter',
+          vesselName: vessel.name,
+          mmsi: vessel.mmsi,
+          timestamp: Date.now(),
+        })
+      }
+    }
+    // Show notification for leaving vessels (prioritize entering if both)
+    else if (left.length > 0) {
+      // Find vessel name from previous data if possible
+      setNotification({
+        id: `exit-${left[0]}-${Date.now()}`,
+        type: 'exit',
+        vesselName: `MMSI ${left[0]}`,
+        mmsi: left[0],
+        timestamp: Date.now(),
+      })
+    }
+
+    // Update previous vessels
+    previousVesselsRef.current = currentMMSIs
+  }, [data])
 
   if (error) {
     return (
@@ -92,5 +149,10 @@ export default function Home() {
     )
   }
 
-  return <AISMap vessels={data.vessels} source={data.source} />
+  return (
+    <>
+      <AISMap vessels={data.vessels} source={data.source} />
+      <GeofenceNotification notification={notification} />
+    </>
+  )
 }
