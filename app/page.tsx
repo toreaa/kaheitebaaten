@@ -95,6 +95,7 @@ export default function Home() {
 
   // Stationary vessel tracking (boats staying still in geofence)
   const [stationaryRecords, setStationaryRecords] = useState<StationaryRecord[]>([])
+  const lastStationaryUpdateRef = useRef<number>(Date.now())
 
   // Fetch passages from backend API
   const { data: passagesData } = useSWR<{ passages: VesselPassage[]; source: string }>(
@@ -202,67 +203,77 @@ export default function Home() {
     )
 
     // Track stationary vessels (speed < 0.5 knots and in bounds)
-    const stationaryThreshold = 0.5 // knots
-    const pollingIntervalMinutes = 0.5 // 30 seconds = 0.5 minutes
+    // Only update once per 30 seconds to avoid rapid counting
+    const now = Date.now()
+    const timeSinceLastUpdate = now - lastStationaryUpdateRef.current
+    const shouldUpdateStationary = timeSinceLastUpdate >= 30000 // 30 seconds
 
-    const updatedStationary = [...stationaryRecords]
+    if (shouldUpdateStationary) {
+      const stationaryThreshold = 0.5 // knots
+      const actualMinutesElapsed = timeSinceLastUpdate / 60000 // Convert ms to minutes
 
-    vesselsInBounds.forEach(vessel => {
-      if (vessel.speed < stationaryThreshold) {
-        // Vessel is stationary
-        const existingIndex = updatedStationary.findIndex(r => r.mmsi === vessel.mmsi)
+      const updatedStationary = [...stationaryRecords]
 
-        if (existingIndex >= 0) {
-          // Update existing record
-          const existing = updatedStationary[existingIndex]
-          const distance = Math.sqrt(
-            Math.pow(existing.lastPosition.lat - vessel.latitude, 2) +
-            Math.pow(existing.lastPosition.lon - vessel.longitude, 2)
-          )
+      vesselsInBounds.forEach(vessel => {
+        if (vessel.speed < stationaryThreshold) {
+          // Vessel is stationary
+          const existingIndex = updatedStationary.findIndex(r => r.mmsi === vessel.mmsi)
 
-          // If barely moved (< 0.0001 degrees ~10m), add time
-          if (distance < 0.0001) {
-            updatedStationary[existingIndex] = {
-              ...existing,
-              totalMinutesStationary: existing.totalMinutesStationary + pollingIntervalMinutes,
-              lastSeen: Date.now(),
-              lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+          if (existingIndex >= 0) {
+            // Update existing record
+            const existing = updatedStationary[existingIndex]
+            const distance = Math.sqrt(
+              Math.pow(existing.lastPosition.lat - vessel.latitude, 2) +
+              Math.pow(existing.lastPosition.lon - vessel.longitude, 2)
+            )
+
+            // If barely moved (< 0.0001 degrees ~10m), add time
+            if (distance < 0.0001) {
+              updatedStationary[existingIndex] = {
+                ...existing,
+                totalMinutesStationary: existing.totalMinutesStationary + actualMinutesElapsed,
+                lastSeen: now,
+                lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+              }
+            } else {
+              // Moved, reset
+              updatedStationary[existingIndex] = {
+                ...existing,
+                totalMinutesStationary: 0,
+                lastSeen: now,
+                lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+              }
             }
           } else {
-            // Moved, reset
-            updatedStationary[existingIndex] = {
-              ...existing,
-              totalMinutesStationary: 0,
-              lastSeen: Date.now(),
+            // New stationary vessel
+            updatedStationary.push({
+              mmsi: vessel.mmsi,
+              vesselName: vessel.name,
+              totalMinutesStationary: 0, // Start at 0, will accumulate on next update
+              lastSeen: now,
               lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
-            }
+            })
           }
-        } else {
-          // New stationary vessel
-          updatedStationary.push({
-            mmsi: vessel.mmsi,
-            vesselName: vessel.name,
-            totalMinutesStationary: pollingIntervalMinutes,
-            lastSeen: Date.now(),
-            lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
-          })
         }
-      }
-    })
+      })
 
-    // Clean up old records (older than 30 days)
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
-    const cleanedStationary = updatedStationary.filter(r => r.lastSeen >= thirtyDaysAgo)
+      // Clean up old records (older than 30 days)
+      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000
+      const cleanedStationary = updatedStationary.filter(r => r.lastSeen >= thirtyDaysAgo)
 
-    setStationaryRecords(cleanedStationary)
-    localStorage.setItem('stationaryRecords', JSON.stringify(cleanedStationary))
+      setStationaryRecords(cleanedStationary)
+      localStorage.setItem('stationaryRecords', JSON.stringify(cleanedStationary))
+      lastStationaryUpdateRef.current = now
+    }
 
     const currentMMSIs = new Set(vesselsInBounds.map(v => v.mmsi))
 
-    // Skip notifications on first load
+    // Skip notifications and tracking on first load
+    // This ensures we only count vessels that ENTER after page load
     if (isFirstLoadRef.current) {
       previousVesselsRef.current = currentMMSIs
       isFirstLoadRef.current = false
+      console.log('🔵 Initial load - skipping passage tracking for', currentMMSIs.size, 'vessels already in bounds')
       return
     }
 
@@ -339,7 +350,7 @@ export default function Home() {
 
     // Update previous vessels
     previousVesselsRef.current = currentMMSIs
-  }, [data, geofenceBounds, stationaryRecords])
+  }, [data, geofenceBounds])
 
   if (error) {
     return (

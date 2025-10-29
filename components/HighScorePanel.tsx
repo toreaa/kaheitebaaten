@@ -236,8 +236,18 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
           color: '#94a3b8',
           marginTop: '2px',
         }}>
-          Teller kun båter som har forlatt området
+          Kun båter som har forlatt geofencet
         </div>
+        {passages.length > 0 && passages.filter(p => p.type === 'exit').length === 0 && (
+          <div style={{
+            fontSize: '9px',
+            color: '#f59e0b',
+            marginTop: '4px',
+            fontStyle: 'italic',
+          }}>
+            Tips: Bruk reset-knappen hvis lista ikke stemmer
+          </div>
+        )}
       </div>
 
       {/* Scrollable list */}
