@@ -8,9 +8,10 @@ type TimeFilter = '24h' | '30d' | '1y'
 interface HighScorePanelProps {
   passages: VesselPassage[]
   onVesselClick?: (mmsi: number) => void
+  onReset?: () => void
 }
 
-export default function HighScorePanel({ passages, onVesselClick }: HighScorePanelProps) {
+export default function HighScorePanel({ passages, onVesselClick, onReset }: HighScorePanelProps) {
   const [isOpen, setIsOpen] = useState(true)
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('24h')
 
@@ -129,34 +130,55 @@ export default function HighScorePanel({ passages, onVesselClick }: HighScorePan
           background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
           color: 'white',
           padding: '20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
         }}
       >
-        <div>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            🏆 Highscore
-          </h2>
-          <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.8 }}>
-            {passages.length} totale passeringer
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🏆 Highscore
+            </h2>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.8 }}>
+              {passages.length} totale passeringer
+            </p>
+          </div>
+          <button
+            onClick={() => setIsOpen(false)}
+            style={{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: 'white',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: '600',
+            }}
+          >
+            Skjul
+          </button>
         </div>
-        <button
-          onClick={() => setIsOpen(false)}
-          style={{
-            background: 'rgba(255,255,255,0.2)',
-            border: 'none',
-            color: 'white',
-            borderRadius: '6px',
-            padding: '8px 12px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: '600',
-          }}
-        >
-          Skjul
-        </button>
+        {passages.length > 0 && (
+          <button
+            onClick={() => {
+              if (window.confirm('Er du sikker på at du vil nullstille alle passeringer?')) {
+                onReset?.()
+              }
+            }}
+            style={{
+              background: '#dc2626',
+              border: 'none',
+              color: 'white',
+              borderRadius: '6px',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: '600',
+              width: '100%',
+            }}
+          >
+            🗑️ Nullstill highscore
+          </button>
+        )}
       </div>
 
       {/* Time filters */}
@@ -228,7 +250,10 @@ export default function HighScorePanel({ passages, onVesselClick }: HighScorePan
           filteredStats.map((stat, index) => (
             <div
               key={stat.mmsi}
-              onClick={() => onVesselClick?.(stat.mmsi)}
+              onClick={() => {
+                console.log('🔍 Clicking vessel:', stat.vesselName, 'MMSI:', stat.mmsi)
+                onVesselClick?.(stat.mmsi)
+              }}
               style={{
                 background: index < 3 ? '#fef3c7' : 'white',
                 border: '1px solid ' + (index < 3 ? '#fcd34d' : '#e2e8f0'),

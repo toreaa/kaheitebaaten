@@ -216,6 +216,11 @@ function VesselSelector({
 export default function AISMap({ vessels, source, geofenceBounds, selectedVesselMMSI }: AISMapProps) {
   const [mounted, setMounted] = useState(false)
 
+  // Debug logging
+  useEffect(() => {
+    console.log('🗺️ AISMap received selectedVesselMMSI:', selectedVesselMMSI)
+  }, [selectedVesselMMSI])
+
   // Convert GeofenceBounds to Leaflet LatLngBounds format
   const leafletBounds: [[number, number], [number, number]] = [
     [geofenceBounds.latMin, geofenceBounds.lonMin], // Southwest corner
@@ -292,9 +297,12 @@ export default function AISMap({ vessels, source, geofenceBounds, selectedVessel
         <VesselSelector selectedMMSI={selectedVesselMMSI || null} vessels={vessels} />
         {vessels.map((vessel) => {
           const isSelected = selectedVesselMMSI === vessel.mmsi
+          if (isSelected) {
+            console.log('🚕 Rendering TAXI for:', vessel.name, vessel.mmsi)
+          }
           return (
             <Marker
-              key={vessel.mmsi}
+              key={`${vessel.mmsi}-${isSelected ? 'taxi' : 'minion'}`}
               position={[vessel.latitude, vessel.longitude]}
               icon={isSelected ? taxiIcon : vesselIcon}
             >

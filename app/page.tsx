@@ -56,6 +56,33 @@ export default function Home() {
   const previousVesselsRef = useRef<Set<number>>(new Set())
   const isFirstLoadRef = useRef(true)
 
+  // Handler for vessel selection from highscore
+  const handleVesselClick = (mmsi: number) => {
+    console.log('📍 Selected vessel MMSI:', mmsi)
+    setSelectedVesselMMSI(mmsi)
+  }
+
+  // Handler for resetting highscore
+  const handleReset = async () => {
+    console.log('🗑️ Resetting highscore...')
+
+    // Clear localStorage
+    localStorage.removeItem('vesselPassages')
+
+    // Clear state
+    setPassages([])
+
+    // Try to clear Redis (optional - will clear on next cron run anyway)
+    try {
+      await fetch('/api/passages/reset', { method: 'POST' })
+      console.log('✅ Redis cleared')
+    } catch (error) {
+      console.error('Error clearing Redis:', error)
+    }
+
+    console.log('✅ Highscore reset complete')
+  }
+
   // Geofence bounds state with localStorage persistence
   const [geofenceBounds, setGeofenceBounds] = useState<GeofenceBounds>(DEFAULT_BOUNDS)
 
@@ -301,7 +328,8 @@ export default function Home() {
       <GeofenceSettings bounds={geofenceBounds} onBoundsChange={handleBoundsChange} />
       <HighScorePanel
         passages={passages}
-        onVesselClick={(mmsi) => setSelectedVesselMMSI(mmsi)}
+        onVesselClick={handleVesselClick}
+        onReset={handleReset}
       />
     </>
   )
