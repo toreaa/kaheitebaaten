@@ -7,9 +7,10 @@ type TimeFilter = '24h' | '30d' | '1y'
 
 interface HighScorePanelProps {
   passages: VesselPassage[]
+  onVesselClick?: (mmsi: number) => void
 }
 
-export default function HighScorePanel({ passages }: HighScorePanelProps) {
+export default function HighScorePanel({ passages, onVesselClick }: HighScorePanelProps) {
   const [isOpen, setIsOpen] = useState(true)
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('24h')
 
@@ -227,6 +228,7 @@ export default function HighScorePanel({ passages }: HighScorePanelProps) {
           filteredStats.map((stat, index) => (
             <div
               key={stat.mmsi}
+              onClick={() => onVesselClick?.(stat.mmsi)}
               style={{
                 background: index < 3 ? '#fef3c7' : 'white',
                 border: '1px solid ' + (index < 3 ? '#fcd34d' : '#e2e8f0'),
@@ -236,6 +238,16 @@ export default function HighScorePanel({ passages }: HighScorePanelProps) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateX(4px)'
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateX(0)'
+                e.currentTarget.style.boxShadow = 'none'
               }}
             >
               {/* Rank */}

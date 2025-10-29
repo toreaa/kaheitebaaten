@@ -52,6 +52,7 @@ export default function Home() {
   )
 
   const [notification, setNotification] = useState<VesselNotification | null>(null)
+  const [selectedVesselMMSI, setSelectedVesselMMSI] = useState<number | null>(null)
   const previousVesselsRef = useRef<Set<number>>(new Set())
   const isFirstLoadRef = useRef(true)
 
@@ -290,10 +291,18 @@ export default function Home() {
 
   return (
     <>
-      <AISMap vessels={data.vessels} source={data.source} geofenceBounds={geofenceBounds} />
+      <AISMap
+        vessels={data.vessels}
+        source={data.source}
+        geofenceBounds={geofenceBounds}
+        selectedVesselMMSI={selectedVesselMMSI}
+      />
       <GeofenceNotification notification={notification} />
       <GeofenceSettings bounds={geofenceBounds} onBoundsChange={handleBoundsChange} />
-      <HighScorePanel passages={passages} />
+      <HighScorePanel
+        passages={passages}
+        onVesselClick={(mmsi) => setSelectedVesselMMSI(mmsi)}
+      />
     </>
   )
 }

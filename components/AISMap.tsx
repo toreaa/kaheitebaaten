@@ -99,6 +99,7 @@ interface AISMapProps {
   vessels: AISVessel[]
   source: 'live' | 'mock'
   geofenceBounds: GeofenceBounds
+  selectedVesselMMSI?: number | null
 }
 
 function MapUpdater({ geofenceBounds }: { geofenceBounds: GeofenceBounds }) {
@@ -116,7 +117,50 @@ function MapUpdater({ geofenceBounds }: { geofenceBounds: GeofenceBounds }) {
   return null
 }
 
-export default function AISMap({ vessels, source, geofenceBounds }: AISMapProps) {
+function VesselSelector({
+  selectedMMSI,
+  vessels,
+}: {
+  selectedMMSI: number | null
+  vessels: AISVessel[]
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!selectedMMSI) return
+
+    // Find the selected vessel
+    const vessel = vessels.find((v) => v.mmsi === selectedMMSI)
+    if (!vessel) {
+      console.log(`Vessel with MMSI ${selectedMMSI} not currently on map`)
+      return
+    }
+
+    // Zoom to vessel location
+    map.flyTo([vessel.latitude, vessel.longitude], 14, {
+      duration: 1.5,
+    })
+
+    // Open the popup for this vessel after a short delay
+    setTimeout(() => {
+      map.eachLayer((layer: any) => {
+        if (layer instanceof L.Marker) {
+          const markerLatLng = layer.getLatLng()
+          if (
+            Math.abs(markerLatLng.lat - vessel.latitude) < 0.0001 &&
+            Math.abs(markerLatLng.lng - vessel.longitude) < 0.0001
+          ) {
+            layer.openPopup()
+          }
+        }
+      })
+    }, 1600)
+  }, [selectedMMSI, vessels, map])
+
+  return null
+}
+
+export default function AISMap({ vessels, source, geofenceBounds, selectedVesselMMSI }: AISMapProps) {
   const [mounted, setMounted] = useState(false)
 
   // Convert GeofenceBounds to Leaflet LatLngBounds format
@@ -192,6 +236,7 @@ export default function AISMap({ vessels, source, geofenceBounds }: AISMapProps)
           }}
         />
         <MapUpdater geofenceBounds={geofenceBounds} />
+        <VesselSelector selectedMMSI={selectedVesselMMSI || null} vessels={vessels} />
         {vessels.map((vessel) => (
           <Marker
             key={vessel.mmsi}
