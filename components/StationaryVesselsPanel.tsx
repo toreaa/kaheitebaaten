@@ -24,12 +24,41 @@ function formatDuration(minutes: number): string {
 export default function StationaryVesselsPanel({ records, onVesselClick }: StationaryVesselsPanelProps) {
   // Get top 3 by total minutes stationary
   const top3 = records
-    .filter(r => r.totalMinutesStationary > 5) // At least 5 minutes
+    .filter(r => r.totalMinutesStationary > 1) // At least 1 minute (lowered from 5)
     .sort((a, b) => b.totalMinutesStationary - a.totalMinutesStationary)
     .slice(0, 3)
 
-  if (top3.length === 0) {
-    return null // Don't show panel if no stationary vessels
+  // Always show debug panel in bottom corner
+  const showDebugPanel = records.length === 0 || top3.length === 0
+
+  if (showDebugPanel) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 20,
+          left: 20,
+          zIndex: 1000,
+          background: '#fef3c7',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          padding: '12px',
+          fontSize: '11px',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          border: '2px solid #f59e0b',
+        }}
+      >
+        <div style={{ fontWeight: '700', color: '#92400e' }}>
+          ⚓ Stille båter: {records.length} tracked
+        </div>
+        <div style={{ color: '#78716c', marginTop: '4px' }}>
+          {records.length === 0
+            ? 'Venter på båter som ligger stille...'
+            : `${top3.length} med >1 min stille tid`
+          }
+        </div>
+      </div>
+    )
   }
 
   return (

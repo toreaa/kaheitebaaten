@@ -58,7 +58,7 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
     // Convert to array and sort by passage count
     return Array.from(statsMap.values())
       .sort((a, b) => b.passageCount - a.passageCount)
-      .slice(0, 10) // Top 10
+      .slice(0, 5) // Top 5
   }, [passages, timeFilter])
 
   const getTimeLabel = () => {
@@ -106,7 +106,7 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         }}
       >
-        🏆 Highscore
+        🏆 Topp 5
       </button>
     )
   }
@@ -138,7 +138,7 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🏆 Highscore
+              🏆 Topp 5 Passeringer
             </h2>
             <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.8 }}>
               {passages.filter(p => p.type === 'exit').length} komplette passeringer
