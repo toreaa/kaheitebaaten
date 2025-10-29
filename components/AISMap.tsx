@@ -69,11 +69,61 @@ const minionSvg = `
   <circle cx="29" cy="24" r="2" fill="#333"/>
 </svg>
 `
+
+// Taxi-style vessel icon (for selected vessel)
+const taxiSvg = `
+<svg width="40" height="48" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg">
+  <!-- Taxi roof sign -->
+  <rect x="12" y="2" width="16" height="6" rx="2" fill="#000"/>
+  <text x="20" y="6.5" font-family="Arial" font-size="5" font-weight="bold" fill="#FFD700" text-anchor="middle">TAXI</text>
+
+  <!-- Car body (yellow) -->
+  <rect x="4" y="16" width="32" height="18" rx="3" fill="#FFD700" stroke="#000" stroke-width="1.5"/>
+
+  <!-- Windshield -->
+  <rect x="8" y="10" width="24" height="8" rx="2" fill="#87CEEB" stroke="#000" stroke-width="1"/>
+
+  <!-- Windows -->
+  <rect x="6" y="20" width="8" height="8" rx="1" fill="#87CEEB" stroke="#000" stroke-width="0.5"/>
+  <rect x="26" y="20" width="8" height="8" rx="1" fill="#87CEEB" stroke="#000" stroke-width="0.5"/>
+
+  <!-- Door lines -->
+  <line x1="20" y1="18" x2="20" y2="34" stroke="#000" stroke-width="1"/>
+
+  <!-- Wheels -->
+  <circle cx="10" cy="34" r="4" fill="#333"/>
+  <circle cx="10" cy="34" r="2" fill="#555"/>
+  <circle cx="30" cy="34" r="4" fill="#333"/>
+  <circle cx="30" cy="34" r="2" fill="#555"/>
+
+  <!-- Bumpers -->
+  <rect x="2" y="30" width="3" height="3" rx="1" fill="#333"/>
+  <rect x="35" y="30" width="3" height="3" rx="1" fill="#333"/>
+
+  <!-- Headlights -->
+  <circle cx="4" cy="24" r="1.5" fill="#FFF" opacity="0.8"/>
+  <circle cx="36" cy="24" r="1.5" fill="#FFF" opacity="0.8"/>
+
+  <!-- Checkered pattern -->
+  <rect x="16" y="26" width="2" height="2" fill="#000"/>
+  <rect x="18" y="28" width="2" height="2" fill="#000"/>
+  <rect x="20" y="26" width="2" height="2" fill="#000"/>
+  <rect x="22" y="28" width="2" height="2" fill="#000"/>
+</svg>
+`
+
 const vesselIcon = new L.Icon({
   iconUrl: 'data:image/svg+xml;base64,' + btoa(minionSvg),
   iconSize: [32, 40],
   iconAnchor: [16, 40],
   popupAnchor: [0, -40],
+})
+
+const taxiIcon = new L.Icon({
+  iconUrl: 'data:image/svg+xml;base64,' + btoa(taxiSvg),
+  iconSize: [40, 48],
+  iconAnchor: [20, 48],
+  popupAnchor: [0, -48],
 })
 
 function formatSpeed(speed: number): string {
@@ -132,29 +182,32 @@ function VesselSelector({
     // Find the selected vessel
     const vessel = vessels.find((v) => v.mmsi === selectedMMSI)
     if (!vessel) {
-      console.log(`Vessel with MMSI ${selectedMMSI} not currently on map`)
+      console.log(`🚕 Vessel with MMSI ${selectedMMSI} not currently on map - may have left the area`)
       return
     }
 
-    // Zoom to vessel location
-    map.flyTo([vessel.latitude, vessel.longitude], 14, {
-      duration: 1.5,
+    console.log(`🚕 Zooming to vessel: ${vessel.name} (MMSI: ${vessel.mmsi})`)
+
+    // Zoom to vessel location with higher zoom level
+    map.flyTo([vessel.latitude, vessel.longitude], 15, {
+      duration: 1.2,
     })
 
-    // Open the popup for this vessel after a short delay
+    // Open the popup for this vessel after animation completes
     setTimeout(() => {
       map.eachLayer((layer: any) => {
         if (layer instanceof L.Marker) {
           const markerLatLng = layer.getLatLng()
+          // Check if this marker is at the vessel's position
           if (
-            Math.abs(markerLatLng.lat - vessel.latitude) < 0.0001 &&
-            Math.abs(markerLatLng.lng - vessel.longitude) < 0.0001
+            Math.abs(markerLatLng.lat - vessel.latitude) < 0.00001 &&
+            Math.abs(markerLatLng.lng - vessel.longitude) < 0.00001
           ) {
             layer.openPopup()
           }
         }
       })
-    }, 1600)
+    }, 1300)
   }, [selectedMMSI, vessels, map])
 
   return null
@@ -237,12 +290,14 @@ export default function AISMap({ vessels, source, geofenceBounds, selectedVessel
         />
         <MapUpdater geofenceBounds={geofenceBounds} />
         <VesselSelector selectedMMSI={selectedVesselMMSI || null} vessels={vessels} />
-        {vessels.map((vessel) => (
-          <Marker
-            key={vessel.mmsi}
-            position={[vessel.latitude, vessel.longitude]}
-            icon={vesselIcon}
-          >
+        {vessels.map((vessel) => {
+          const isSelected = selectedVesselMMSI === vessel.mmsi
+          return (
+            <Marker
+              key={vessel.mmsi}
+              position={[vessel.latitude, vessel.longitude]}
+              icon={isSelected ? taxiIcon : vesselIcon}
+            >
             <Popup>
               <div className="vessel-popup">
                 <h3>{vessel.name}</h3>
@@ -274,7 +329,8 @@ export default function AISMap({ vessels, source, geofenceBounds, selectedVessel
               </div>
             </Popup>
           </Marker>
-        ))}
+          )
+        })}
       </MapContainer>
     </div>
   )
