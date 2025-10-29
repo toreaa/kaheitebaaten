@@ -11,3 +11,11 @@ export interface VesselStats {
   passageCount: number
   lastSeen: number
 }
+
+export interface StationaryRecord {
+  mmsi: number
+  vesselName: string
+  totalMinutesStationary: number // Total minutes spent stationary
+  lastSeen: number
+  lastPosition: { lat: number; lon: number }
+}

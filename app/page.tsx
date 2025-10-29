@@ -8,8 +8,9 @@ import GeofenceNotification, { type VesselNotification } from '@/components/Geof
 import GeofenceSettings from '@/components/GeofenceSettings'
 import HighScorePanel from '@/components/HighScorePanel'
 import CurrentVesselsList from '@/components/CurrentVesselsList'
+import StationaryVesselsPanel from '@/components/StationaryVesselsPanel'
 import type { GeofenceBounds } from '@/components/AISMap'
-import type { VesselPassage } from '@/types/passage'
+import type { VesselPassage, StationaryRecord } from '@/types/passage'
 
 // Default Tromsøysundet bounds
 const DEFAULT_BOUNDS: GeofenceBounds = {
@@ -69,9 +70,11 @@ export default function Home() {
 
     // Clear localStorage
     localStorage.removeItem('vesselPassages')
+    localStorage.removeItem('stationaryRecords')
 
     // Clear state
     setPassages([])
+    setStationaryRecords([])
 
     // Try to clear Redis (optional - will clear on next cron run anyway)
     try {
@@ -90,6 +93,9 @@ export default function Home() {
   // Vessel passage history from API + localStorage
   const [passages, setPassages] = useState<VesselPassage[]>([])
 
+  // Stationary vessel tracking (boats staying still in geofence)
+  const [stationaryRecords, setStationaryRecords] = useState<StationaryRecord[]>([])
+
   // Fetch passages from backend API
   const { data: passagesData } = useSWR<{ passages: VesselPassage[]; source: string }>(
     '/api/passages',
@@ -100,7 +106,7 @@ export default function Home() {
     }
   )
 
-  // Load bounds and passages on mount
+  // Load bounds, passages, and stationary records on mount
   useEffect(() => {
     const savedBounds = localStorage.getItem('geofenceBounds')
     if (savedBounds) {
@@ -119,6 +125,20 @@ export default function Home() {
         setPassages(localPassages)
       } catch (e) {
         console.error('Failed to parse saved passages:', e)
+      }
+    }
+
+    // Load stationary records
+    const savedStationary = localStorage.getItem('stationaryRecords')
+    if (savedStationary) {
+      try {
+        const records = JSON.parse(savedStationary)
+        // Filter out records older than 30 days
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+        const recentRecords = records.filter((r: StationaryRecord) => r.lastSeen >= thirtyDaysAgo)
+        setStationaryRecords(recentRecords)
+      } catch (e) {
+        console.error('Failed to parse stationary records:', e)
       }
     }
   }, [])
@@ -169,7 +189,7 @@ export default function Home() {
     isFirstLoadRef.current = true
   }
 
-  // Track vessels entering/leaving the geofenced area
+  // Track vessels entering/leaving the geofenced area AND stationary vessels
   useEffect(() => {
     if (!data?.vessels) return
 
@@ -180,6 +200,62 @@ export default function Home() {
       v.longitude >= geofenceBounds.lonMin &&
       v.longitude <= geofenceBounds.lonMax
     )
+
+    // Track stationary vessels (speed < 0.5 knots and in bounds)
+    const stationaryThreshold = 0.5 // knots
+    const pollingIntervalMinutes = 0.5 // 30 seconds = 0.5 minutes
+
+    const updatedStationary = [...stationaryRecords]
+
+    vesselsInBounds.forEach(vessel => {
+      if (vessel.speed < stationaryThreshold) {
+        // Vessel is stationary
+        const existingIndex = updatedStationary.findIndex(r => r.mmsi === vessel.mmsi)
+
+        if (existingIndex >= 0) {
+          // Update existing record
+          const existing = updatedStationary[existingIndex]
+          const distance = Math.sqrt(
+            Math.pow(existing.lastPosition.lat - vessel.latitude, 2) +
+            Math.pow(existing.lastPosition.lon - vessel.longitude, 2)
+          )
+
+          // If barely moved (< 0.0001 degrees ~10m), add time
+          if (distance < 0.0001) {
+            updatedStationary[existingIndex] = {
+              ...existing,
+              totalMinutesStationary: existing.totalMinutesStationary + pollingIntervalMinutes,
+              lastSeen: Date.now(),
+              lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+            }
+          } else {
+            // Moved, reset
+            updatedStationary[existingIndex] = {
+              ...existing,
+              totalMinutesStationary: 0,
+              lastSeen: Date.now(),
+              lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+            }
+          }
+        } else {
+          // New stationary vessel
+          updatedStationary.push({
+            mmsi: vessel.mmsi,
+            vesselName: vessel.name,
+            totalMinutesStationary: pollingIntervalMinutes,
+            lastSeen: Date.now(),
+            lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+          })
+        }
+      }
+    })
+
+    // Clean up old records (older than 30 days)
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const cleanedStationary = updatedStationary.filter(r => r.lastSeen >= thirtyDaysAgo)
+
+    setStationaryRecords(cleanedStationary)
+    localStorage.setItem('stationaryRecords', JSON.stringify(cleanedStationary))
 
     const currentMMSIs = new Set(vesselsInBounds.map(v => v.mmsi))
 
@@ -261,7 +337,7 @@ export default function Home() {
 
     // Update previous vessels
     previousVesselsRef.current = currentMMSIs
-  }, [data, geofenceBounds])
+  }, [data, geofenceBounds, stationaryRecords])
 
   if (error) {
     return (
@@ -334,6 +410,10 @@ export default function Home() {
       />
       <CurrentVesselsList
         vessels={data.vessels}
+        onVesselClick={handleVesselClick}
+      />
+      <StationaryVesselsPanel
+        records={stationaryRecords}
         onVesselClick={handleVesselClick}
       />
     </>
