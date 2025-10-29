@@ -1,7 +1,6 @@
-import { kv } from '@vercel/kv'
 import { NextResponse } from 'next/server'
+import { redisGet, redisSet } from '@/lib/redis'
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 interface VesselPassage {
@@ -13,16 +12,16 @@ interface VesselPassage {
 
 export async function GET() {
   try {
-    const passages = await kv.get<VesselPassage[]>('passages:all')
+    const passages = await redisGet<VesselPassage[]>('passages:all')
 
     return NextResponse.json({
       passages: passages || [],
-      source: passages && passages.length > 0 ? 'kv' : 'empty',
+      source: passages && passages.length > 0 ? 'redis' : 'empty',
     })
   } catch (error) {
-    console.error('Error fetching passages from KV:', error)
+    console.error('Error fetching passages from Redis:', error)
 
-    // Return empty array if KV is not set up yet
+    // Return empty array if Redis is not set up yet
     return NextResponse.json({
       passages: [],
       source: 'error',
@@ -52,12 +51,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid bounds format' }, { status: 400 })
     }
 
-    // Save bounds to KV
-    await kv.set('geofence:bounds', bounds)
+    // Save bounds to Redis
+    await redisSet('geofence:bounds', bounds)
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error saving bounds to KV:', error)
+    console.error('Error saving bounds to Redis:', error)
     return NextResponse.json(
       { error: String(error) },
       { status: 500 }

@@ -1,7 +1,6 @@
-import { kv } from '@vercel/kv'
 import { NextResponse } from 'next/server'
+import { redisGet, redisSet } from '@/lib/redis'
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 // Tromsøysundet default bounds (will be replaced with user's custom bounds if available)
@@ -128,13 +127,13 @@ async function fetchAISData(bounds: GeofenceBounds): Promise<BarentswatchVessel[
 
 export async function GET() {
   try {
-    // Get current geofence bounds from KV or use defaults
+    // Get current geofence bounds from Redis or use defaults
     let bounds: GeofenceBounds
     try {
-      const savedBounds = await kv.get<GeofenceBounds>('geofence:bounds')
+      const savedBounds = await redisGet<GeofenceBounds>('geofence:bounds')
       bounds = savedBounds || DEFAULT_BOUNDS
     } catch (error) {
-      console.log('Using default bounds, KV not available yet:', error)
+      console.log('Using default bounds, Redis not available yet:', error)
       bounds = DEFAULT_BOUNDS
     }
 
@@ -156,13 +155,13 @@ export async function GET() {
       vesselNames[v.mmsi] = v.name
     })
 
-    // Get previous vessel state from KV
+    // Get previous vessel state from Redis
     let previousMMSIs: number[] = []
     try {
-      const stored = await kv.get<number[]>('tracking:current_vessels')
+      const stored = await redisGet<number[]>('tracking:current_vessels')
       previousMMSIs = stored || []
     } catch (error) {
-      console.error('Error reading previous vessels from KV:', error)
+      console.error('Error reading previous vessels from Redis:', error)
     }
 
     const previousSet = new Set(previousMMSIs)
@@ -178,13 +177,13 @@ export async function GET() {
     // Create passage records
     const newPassages: VesselPassage[] = []
 
-    // Get vessel names from KV for vessels that left
+    // Get vessel names from Redis for vessels that left
     let storedVesselNames: Record<number, string> = {}
     try {
-      const stored = await kv.get<Record<number, string>>('tracking:vessel_names')
+      const stored = await redisGet<Record<number, string>>('tracking:vessel_names')
       storedVesselNames = stored || {}
     } catch (error) {
-      console.error('Error reading vessel names from KV:', error)
+      console.error('Error reading vessel names from Redis:', error)
     }
 
     // Log entering vessels
@@ -211,33 +210,33 @@ export async function GET() {
       })
     })
 
-    // Save passages to KV
+    // Save passages to Redis
     if (newPassages.length > 0) {
       try {
         // Append to existing passages list
-        const existingPassages = await kv.get<VesselPassage[]>('passages:all') || []
+        const existingPassages = await redisGet<VesselPassage[]>('passages:all') || []
         const updatedPassages = [...existingPassages, ...newPassages]
 
         // Keep only last 10,000 passages to avoid growing too large
         const trimmedPassages = updatedPassages.slice(-10000)
 
-        await kv.set('passages:all', trimmedPassages)
+        await redisSet('passages:all', trimmedPassages)
 
         console.log(`Logged ${newPassages.length} passages:`, newPassages)
       } catch (error) {
-        console.error('Error saving passages to KV:', error)
+        console.error('Error saving passages to Redis:', error)
       }
     }
 
     // Update current vessel state
     try {
-      await kv.set('tracking:current_vessels', currentMMSIs)
+      await redisSet('tracking:current_vessels', currentMMSIs)
 
       // Update vessel names map (merge with existing)
       const updatedNames = { ...storedVesselNames, ...vesselNames }
-      await kv.set('tracking:vessel_names', updatedNames)
+      await redisSet('tracking:vessel_names', updatedNames)
     } catch (error) {
-      console.error('Error updating vessel state in KV:', error)
+      console.error('Error updating vessel state in Redis:', error)
     }
 
     return NextResponse.json({
