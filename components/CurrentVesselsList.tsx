@@ -33,7 +33,7 @@ export default function CurrentVesselsList({ vessels, onVesselClick }: CurrentVe
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         }}
       >
-        🚢 Nåværende båter ({vessels.length})
+        🚢 Båter ({vessels.length})
       </button>
     )
   }
@@ -65,10 +65,10 @@ export default function CurrentVesselsList({ vessels, onVesselClick }: CurrentVe
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🚢 I området nå
+              🚢 Båter på kartet
             </h2>
             <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.9 }}>
-              {vessels.length} {vessels.length === 1 ? 'båt' : 'båter'}
+              {vessels.length} {vessels.length === 1 ? 'båt' : 'båter'} live
             </p>
           </div>
           <button
@@ -106,7 +106,7 @@ export default function CurrentVesselsList({ vessels, onVesselClick }: CurrentVe
               fontSize: '14px',
             }}
           >
-            Ingen båter i området akkurat nå
+            Ingen båter på kartet akkurat nå
           </div>
         ) : (
           vessels

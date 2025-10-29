@@ -317,14 +317,6 @@ export default function Home() {
     )
   }
 
-  // Filter vessels that are currently within geofence bounds
-  const vesselsInBounds = data.vessels.filter(v =>
-    v.latitude >= geofenceBounds.latMin &&
-    v.latitude <= geofenceBounds.latMax &&
-    v.longitude >= geofenceBounds.lonMin &&
-    v.longitude <= geofenceBounds.lonMax
-  )
-
   return (
     <>
       <AISMap
@@ -341,7 +333,7 @@ export default function Home() {
         onReset={handleReset}
       />
       <CurrentVesselsList
-        vessels={vesselsInBounds}
+        vessels={data.vessels}
         onVesselClick={handleVesselClick}
       />
     </>
