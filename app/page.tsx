@@ -66,15 +66,21 @@ export default function Home() {
 
   // Handler for resetting highscore
   const handleReset = async () => {
-    console.log('🗑️ Resetting highscore...')
+    console.log('🗑️ Resetting all data...')
 
     // Clear localStorage
     localStorage.removeItem('vesselPassages')
     localStorage.removeItem('stationaryRecords')
+    localStorage.setItem('dataVersion', '2') // Keep version
 
     // Clear state
     setPassages([])
     setStationaryRecords([])
+
+    // Reset tracking refs
+    previousVesselsRef.current = new Set()
+    isFirstLoadRef.current = true
+    lastStationaryUpdateRef.current = Date.now()
 
     // Try to clear Redis (optional - will clear on next cron run anyway)
     try {
@@ -84,7 +90,7 @@ export default function Home() {
       console.error('Error clearing Redis:', error)
     }
 
-    console.log('✅ Highscore reset complete')
+    console.log('✅ All data reset - starting fresh!')
   }
 
   // Geofence bounds state with localStorage persistence
@@ -109,6 +115,8 @@ export default function Home() {
 
   // Load bounds, passages, and stationary records on mount
   useEffect(() => {
+    console.log('🔧 Loading saved data from localStorage...')
+
     const savedBounds = localStorage.getItem('geofenceBounds')
     if (savedBounds) {
       try {
@@ -118,11 +126,25 @@ export default function Home() {
       }
     }
 
+    // Check for data version - if old format, clear it
+    const dataVersion = localStorage.getItem('dataVersion')
+    const currentVersion = '2' // Increment this when we change data structure
+
+    if (dataVersion !== currentVersion) {
+      console.log('🔄 Old data format detected, clearing localStorage...')
+      localStorage.removeItem('vesselPassages')
+      localStorage.removeItem('stationaryRecords')
+      localStorage.setItem('dataVersion', currentVersion)
+      console.log('✅ localStorage cleared - starting fresh')
+      return // Don't load old data
+    }
+
     // Load localStorage passages for backward compatibility
     const savedPassages = localStorage.getItem('vesselPassages')
     if (savedPassages) {
       try {
         const localPassages = JSON.parse(savedPassages)
+        console.log('📦 Loaded', localPassages.length, 'passages from localStorage')
         setPassages(localPassages)
       } catch (e) {
         console.error('Failed to parse saved passages:', e)
@@ -137,6 +159,7 @@ export default function Home() {
         // Filter out records older than 30 days
         const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
         const recentRecords = records.filter((r: StationaryRecord) => r.lastSeen >= thirtyDaysAgo)
+        console.log('⚓ Loaded', recentRecords.length, 'stationary records from localStorage')
         setStationaryRecords(recentRecords)
       } catch (e) {
         console.error('Failed to parse stationary records:', e)
@@ -209,60 +232,69 @@ export default function Home() {
     const shouldUpdateStationary = timeSinceLastUpdate >= 30000 // 30 seconds
 
     if (shouldUpdateStationary) {
+      console.log('⏱️ Updating stationary vessels - elapsed:', (timeSinceLastUpdate / 1000).toFixed(1), 'seconds')
+
       const stationaryThreshold = 0.5 // knots
       const actualMinutesElapsed = timeSinceLastUpdate / 60000 // Convert ms to minutes
 
-      const updatedStationary = [...stationaryRecords]
+      // Use functional update to avoid dependency issues
+      setStationaryRecords(prevRecords => {
+        const updatedStationary = [...prevRecords]
 
-      vesselsInBounds.forEach(vessel => {
-        if (vessel.speed < stationaryThreshold) {
-          // Vessel is stationary
-          const existingIndex = updatedStationary.findIndex(r => r.mmsi === vessel.mmsi)
+        vesselsInBounds.forEach(vessel => {
+          if (vessel.speed < stationaryThreshold) {
+            // Vessel is stationary
+            const existingIndex = updatedStationary.findIndex(r => r.mmsi === vessel.mmsi)
 
-          if (existingIndex >= 0) {
-            // Update existing record
-            const existing = updatedStationary[existingIndex]
-            const distance = Math.sqrt(
-              Math.pow(existing.lastPosition.lat - vessel.latitude, 2) +
-              Math.pow(existing.lastPosition.lon - vessel.longitude, 2)
-            )
+            if (existingIndex >= 0) {
+              // Update existing record
+              const existing = updatedStationary[existingIndex]
+              const distance = Math.sqrt(
+                Math.pow(existing.lastPosition.lat - vessel.latitude, 2) +
+                Math.pow(existing.lastPosition.lon - vessel.longitude, 2)
+              )
 
-            // If barely moved (< 0.0001 degrees ~10m), add time
-            if (distance < 0.0001) {
-              updatedStationary[existingIndex] = {
-                ...existing,
-                totalMinutesStationary: existing.totalMinutesStationary + actualMinutesElapsed,
-                lastSeen: now,
-                lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+              // If barely moved (< 0.0001 degrees ~10m), add time
+              if (distance < 0.0001) {
+                console.log('⚓ Adding', actualMinutesElapsed.toFixed(2), 'min to', vessel.name)
+                updatedStationary[existingIndex] = {
+                  ...existing,
+                  totalMinutesStationary: existing.totalMinutesStationary + actualMinutesElapsed,
+                  lastSeen: now,
+                  lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+                }
+              } else {
+                // Moved, reset
+                console.log('🔄 Vessel moved, resetting:', vessel.name)
+                updatedStationary[existingIndex] = {
+                  ...existing,
+                  totalMinutesStationary: 0,
+                  lastSeen: now,
+                  lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
+                }
               }
             } else {
-              // Moved, reset
-              updatedStationary[existingIndex] = {
-                ...existing,
-                totalMinutesStationary: 0,
+              // New stationary vessel
+              console.log('🆕 New stationary vessel:', vessel.name)
+              updatedStationary.push({
+                mmsi: vessel.mmsi,
+                vesselName: vessel.name,
+                totalMinutesStationary: 0, // Start at 0, will accumulate on next update
                 lastSeen: now,
                 lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
-              }
+              })
             }
-          } else {
-            // New stationary vessel
-            updatedStationary.push({
-              mmsi: vessel.mmsi,
-              vesselName: vessel.name,
-              totalMinutesStationary: 0, // Start at 0, will accumulate on next update
-              lastSeen: now,
-              lastPosition: { lat: vessel.latitude, lon: vessel.longitude },
-            })
           }
-        }
+        })
+
+        // Clean up old records (older than 30 days)
+        const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000
+        const cleanedStationary = updatedStationary.filter(r => r.lastSeen >= thirtyDaysAgo)
+
+        localStorage.setItem('stationaryRecords', JSON.stringify(cleanedStationary))
+        return cleanedStationary
       })
 
-      // Clean up old records (older than 30 days)
-      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000
-      const cleanedStationary = updatedStationary.filter(r => r.lastSeen >= thirtyDaysAgo)
-
-      setStationaryRecords(cleanedStationary)
-      localStorage.setItem('stationaryRecords', JSON.stringify(cleanedStationary))
       lastStationaryUpdateRef.current = now
     }
 
