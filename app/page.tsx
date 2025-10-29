@@ -7,6 +7,7 @@ import type { AISResponse } from '@/types/ais'
 import GeofenceNotification, { type VesselNotification } from '@/components/GeofenceNotification'
 import GeofenceSettings from '@/components/GeofenceSettings'
 import HighScorePanel from '@/components/HighScorePanel'
+import CurrentVesselsList from '@/components/CurrentVesselsList'
 import type { GeofenceBounds } from '@/components/AISMap'
 import type { VesselPassage } from '@/types/passage'
 
@@ -316,6 +317,14 @@ export default function Home() {
     )
   }
 
+  // Filter vessels that are currently within geofence bounds
+  const vesselsInBounds = data.vessels.filter(v =>
+    v.latitude >= geofenceBounds.latMin &&
+    v.latitude <= geofenceBounds.latMax &&
+    v.longitude >= geofenceBounds.lonMin &&
+    v.longitude <= geofenceBounds.lonMax
+  )
+
   return (
     <>
       <AISMap
@@ -330,6 +339,10 @@ export default function Home() {
         passages={passages}
         onVesselClick={handleVesselClick}
         onReset={handleReset}
+      />
+      <CurrentVesselsList
+        vessels={vesselsInBounds}
+        onVesselClick={handleVesselClick}
       />
     </>
   )
