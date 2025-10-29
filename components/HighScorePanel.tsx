@@ -34,10 +34,13 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
     // Filter passages by time
     const recentPassages = passages.filter(p => p.timestamp >= cutoffTime)
 
+    // Only count EXIT events (means vessel has completed a passage through the area)
+    const exitPassages = recentPassages.filter(p => p.type === 'exit')
+
     // Count passages per vessel
     const statsMap = new Map<number, VesselStats>()
 
-    recentPassages.forEach(passage => {
+    exitPassages.forEach(passage => {
       const existing = statsMap.get(passage.mmsi)
       if (existing) {
         existing.passageCount++
@@ -138,7 +141,7 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
               🏆 Highscore
             </h2>
             <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.8 }}>
-              {passages.length} totale passeringer
+              {passages.filter(p => p.type === 'exit').length} komplette passeringer
             </p>
           </div>
           <button
@@ -217,14 +220,24 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
         style={{
           padding: '12px 16px',
           background: '#f8fafc',
+        }}
+      >
+        <div style={{
           fontSize: '11px',
           fontWeight: '700',
           color: '#64748b',
           textTransform: 'uppercase',
           letterSpacing: '0.5px',
-        }}
-      >
-        {getTimeLabel()}
+        }}>
+          {getTimeLabel()}
+        </div>
+        <div style={{
+          fontSize: '10px',
+          color: '#94a3b8',
+          marginTop: '2px',
+        }}>
+          Teller kun båter som har forlatt området
+        </div>
       </div>
 
       {/* Scrollable list */}
@@ -335,6 +348,7 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
                   fontSize: '14px',
                   fontWeight: '700',
                 }}
+                title={`${stat.passageCount} ${stat.passageCount === 1 ? 'passering' : 'passeringer'}`}
               >
                 {stat.passageCount}
               </div>

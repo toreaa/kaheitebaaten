@@ -283,6 +283,7 @@ export default function Home() {
     entered.forEach(mmsi => {
       const vessel = vesselsInBounds.find(v => v.mmsi === mmsi)
       if (vessel) {
+        console.log('✅ ENTER geofence:', vessel.name, 'MMSI:', vessel.mmsi)
         newPassages.push({
           mmsi: vessel.mmsi,
           vesselName: vessel.name,
@@ -294,6 +295,7 @@ export default function Home() {
 
     // Log leaving vessels
     left.forEach(mmsi => {
+      console.log('❌ EXIT geofence: MMSI', mmsi)
       newPassages.push({
         mmsi,
         vesselName: `MMSI ${mmsi}`, // We don't have the name for vessels that left
