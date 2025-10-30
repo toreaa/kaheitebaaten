@@ -3,6 +3,7 @@ export interface VesselPassage {
   vesselName: string
   timestamp: number
   type: 'enter' | 'exit'
+  position?: { lat: number; lon: number } // Last known position (especially for exit events)
 }
 
 export interface VesselStats {

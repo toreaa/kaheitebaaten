@@ -150,6 +150,7 @@ interface AISMapProps {
   source: 'live' | 'mock'
   geofenceBounds: GeofenceBounds
   selectedVesselMMSI?: number | null
+  selectedVesselPosition?: { lat: number; lon: number } | null
 }
 
 function MapUpdater({ geofenceBounds }: { geofenceBounds: GeofenceBounds }) {
@@ -169,9 +170,11 @@ function MapUpdater({ geofenceBounds }: { geofenceBounds: GeofenceBounds }) {
 
 function VesselSelector({
   selectedMMSI,
+  selectedPosition,
   vessels,
 }: {
   selectedMMSI: number | null
+  selectedPosition: { lat: number; lon: number } | null | undefined
   vessels: AISVessel[]
 }) {
   const map = useMap()
@@ -179,47 +182,66 @@ function VesselSelector({
   useEffect(() => {
     if (!selectedMMSI) return
 
-    // Find the selected vessel
+    // Find the selected vessel in current vessels
     const vessel = vessels.find((v) => v.mmsi === selectedMMSI)
-    if (!vessel) {
-      console.log(`🚕 Vessel with MMSI ${selectedMMSI} not currently on map - may have left the area`)
-      return
-    }
 
-    console.log(`🚕 Zooming to vessel: ${vessel.name} (MMSI: ${vessel.mmsi})`)
+    if (vessel) {
+      // Vessel is currently on the map
+      console.log(`🚕 Zooming to live vessel: ${vessel.name} (MMSI: ${vessel.mmsi})`)
 
-    // Zoom to vessel location with higher zoom level
-    map.flyTo([vessel.latitude, vessel.longitude], 15, {
-      duration: 1.2,
-    })
-
-    // Open the popup for this vessel after animation completes
-    setTimeout(() => {
-      map.eachLayer((layer: any) => {
-        if (layer instanceof L.Marker) {
-          const markerLatLng = layer.getLatLng()
-          // Check if this marker is at the vessel's position
-          if (
-            Math.abs(markerLatLng.lat - vessel.latitude) < 0.00001 &&
-            Math.abs(markerLatLng.lng - vessel.longitude) < 0.00001
-          ) {
-            layer.openPopup()
-          }
-        }
+      // Zoom to vessel location with higher zoom level
+      map.flyTo([vessel.latitude, vessel.longitude], 15, {
+        duration: 1.2,
       })
-    }, 1300)
-  }, [selectedMMSI, vessels, map])
+
+      // Open the popup for this vessel after animation completes
+      setTimeout(() => {
+        map.eachLayer((layer: any) => {
+          if (layer instanceof L.Marker) {
+            const markerLatLng = layer.getLatLng()
+            // Check if this marker is at the vessel's position
+            if (
+              Math.abs(markerLatLng.lat - vessel.latitude) < 0.00001 &&
+              Math.abs(markerLatLng.lng - vessel.longitude) < 0.00001
+            ) {
+              layer.openPopup()
+            }
+          }
+        })
+      }, 1300)
+    } else if (selectedPosition) {
+      // Vessel is not on map, but we have last known position
+      console.log(`🚕 Zooming to last known position for MMSI ${selectedMMSI} at ${selectedPosition.lat.toFixed(4)}, ${selectedPosition.lon.toFixed(4)}`)
+
+      map.flyTo([selectedPosition.lat, selectedPosition.lon], 15, {
+        duration: 1.2,
+      })
+
+      // Add a temporary marker for the last known position
+      const tempMarker = L.marker([selectedPosition.lat, selectedPosition.lon])
+        .addTo(map)
+        .bindPopup(`<b>MMSI ${selectedMMSI}</b><br/>Siste kjente posisjon<br/>${selectedPosition.lat.toFixed(4)}, ${selectedPosition.lon.toFixed(4)}`)
+        .openPopup()
+
+      // Remove the temporary marker after 10 seconds
+      setTimeout(() => {
+        map.removeLayer(tempMarker)
+      }, 10000)
+    } else {
+      console.log(`🚕 Vessel with MMSI ${selectedMMSI} not currently on map and no position available`)
+    }
+  }, [selectedMMSI, selectedPosition, vessels, map])
 
   return null
 }
 
-export default function AISMap({ vessels, source, geofenceBounds, selectedVesselMMSI }: AISMapProps) {
+export default function AISMap({ vessels, source, geofenceBounds, selectedVesselMMSI, selectedVesselPosition }: AISMapProps) {
   const [mounted, setMounted] = useState(false)
 
   // Debug logging
   useEffect(() => {
-    console.log('🗺️ AISMap received selectedVesselMMSI:', selectedVesselMMSI)
-  }, [selectedVesselMMSI])
+    console.log('🗺️ AISMap received selectedVesselMMSI:', selectedVesselMMSI, 'position:', selectedVesselPosition)
+  }, [selectedVesselMMSI, selectedVesselPosition])
 
   // Convert GeofenceBounds to Leaflet LatLngBounds format
   const leafletBounds: [[number, number], [number, number]] = [
@@ -294,7 +316,7 @@ export default function AISMap({ vessels, source, geofenceBounds, selectedVessel
           }}
         />
         <MapUpdater geofenceBounds={geofenceBounds} />
-        <VesselSelector selectedMMSI={selectedVesselMMSI || null} vessels={vessels} />
+        <VesselSelector selectedMMSI={selectedVesselMMSI || null} selectedPosition={selectedVesselPosition} vessels={vessels} />
         {vessels.map((vessel) => {
           const isSelected = selectedVesselMMSI === vessel.mmsi
           if (isSelected) {

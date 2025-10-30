@@ -29,6 +29,7 @@ interface VesselPassage {
   vesselName: string
   timestamp: number
   type: 'enter' | 'exit'
+  position?: { lat: number; lon: number }
 }
 
 interface GeofenceBounds {
@@ -157,16 +158,53 @@ export async function GET() {
 
     // Get previous vessel state from Redis
     let previousMMSIs: number[] = []
+    let isFirstRun = false
     try {
       const stored = await redisGet<number[]>('tracking:current_vessels')
       previousMMSIs = stored || []
+      // If Redis is empty, this is the first run
+      isFirstRun = !stored || stored.length === 0
     } catch (error) {
       console.error('Error reading previous vessels from Redis:', error)
+      isFirstRun = true
     }
 
     const previousSet = new Set(previousMMSIs)
     const currentMMSIs = vessels.map(v => v.mmsi)
     const currentSet = new Set(currentMMSIs)
+
+    // On first run, just record current state without tracking passages
+    if (isFirstRun) {
+      console.log('🔵 FIRST RUN - Recording current vessels without tracking passages')
+      console.log('Found', vessels.length, 'vessels in geofence - will track future movements')
+
+      try {
+        await redisSet('tracking:current_vessels', currentMMSIs)
+
+        // Store vessel names
+        const vesselNames: Record<number, string> = {}
+        vessels.forEach(v => {
+          vesselNames[v.mmsi] = v.name
+        })
+        await redisSet('tracking:vessel_names', vesselNames)
+
+        // Store vessel positions
+        const vesselPositions: Record<number, { lat: number; lon: number }> = {}
+        vessels.forEach(v => {
+          vesselPositions[v.mmsi] = { lat: v.latitude, lon: v.longitude }
+        })
+        await redisSet('tracking:vessel_positions', vesselPositions)
+      } catch (error) {
+        console.error('Error storing initial vessel state:', error)
+      }
+
+      return NextResponse.json({
+        success: true,
+        firstRun: true,
+        vesselsRecorded: vessels.length,
+        message: 'Initial state recorded - future movements will be tracked'
+      })
+    }
 
     // Find vessels that entered (new MMSIs)
     const entered = currentMMSIs.filter(mmsi => !previousSet.has(mmsi))
@@ -177,24 +215,33 @@ export async function GET() {
     // Create passage records
     const newPassages: VesselPassage[] = []
 
-    // Get vessel names from Redis for vessels that left
+    // Get vessel names and positions from Redis for vessels that left
     let storedVesselNames: Record<number, string> = {}
+    let storedVesselPositions: Record<number, { lat: number; lon: number }> = {}
     try {
       const stored = await redisGet<Record<number, string>>('tracking:vessel_names')
       storedVesselNames = stored || {}
     } catch (error) {
       console.error('Error reading vessel names from Redis:', error)
     }
+    try {
+      const stored = await redisGet<Record<number, { lat: number; lon: number }>>('tracking:vessel_positions')
+      storedVesselPositions = stored || {}
+    } catch (error) {
+      console.error('Error reading vessel positions from Redis:', error)
+    }
 
     // Log entering vessels
     entered.forEach(mmsi => {
       const vessel = vessels.find(v => v.mmsi === mmsi)
       if (vessel) {
+        console.log('✅ CRON ENTER:', vessel.name, 'MMSI:', vessel.mmsi, 'at', vessel.latitude.toFixed(4), vessel.longitude.toFixed(4))
         newPassages.push({
           mmsi: vessel.mmsi,
           vesselName: vessel.name,
           timestamp: Date.now(),
           type: 'enter',
+          position: { lat: vessel.latitude, lon: vessel.longitude },
         })
       }
     })
@@ -202,11 +249,14 @@ export async function GET() {
     // Log leaving vessels
     left.forEach(mmsi => {
       const vesselName = storedVesselNames[mmsi] || `MMSI ${mmsi}`
+      const position = storedVesselPositions[mmsi]
+      console.log('❌ CRON EXIT:', vesselName, 'MMSI:', mmsi, position ? `at ${position.lat.toFixed(4)}, ${position.lon.toFixed(4)}` : '(no position)')
       newPassages.push({
         mmsi,
         vesselName,
         timestamp: Date.now(),
         type: 'exit',
+        position,
       })
     })
 
@@ -235,6 +285,14 @@ export async function GET() {
       // Update vessel names map (merge with existing)
       const updatedNames = { ...storedVesselNames, ...vesselNames }
       await redisSet('tracking:vessel_names', updatedNames)
+
+      // Update vessel positions (current positions)
+      const currentPositions: Record<number, { lat: number; lon: number }> = {}
+      vessels.forEach(v => {
+        currentPositions[v.mmsi] = { lat: v.latitude, lon: v.longitude }
+      })
+      const updatedPositions = { ...storedVesselPositions, ...currentPositions }
+      await redisSet('tracking:vessel_positions', updatedPositions)
     } catch (error) {
       console.error('Error updating vessel state in Redis:', error)
     }

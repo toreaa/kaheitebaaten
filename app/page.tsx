@@ -55,13 +55,18 @@ export default function Home() {
 
   const [notification, setNotification] = useState<VesselNotification | null>(null)
   const [selectedVesselMMSI, setSelectedVesselMMSI] = useState<number | null>(null)
+  const [selectedVesselPosition, setSelectedVesselPosition] = useState<{ lat: number; lon: number } | null>(null)
   const previousVesselsRef = useRef<Set<number>>(new Set())
   const isFirstLoadRef = useRef(true)
 
-  // Handler for vessel selection from highscore
-  const handleVesselClick = (mmsi: number) => {
-    console.log('📍 Selected vessel MMSI:', mmsi)
+  // Store last known positions for all vessels (needed for exit events)
+  const lastPositionsRef = useRef<Map<number, { lat: number; lon: number; name: string }>>(new Map())
+
+  // Handler for vessel selection from highscore or other lists
+  const handleVesselClick = (mmsi: number, position?: { lat: number; lon: number }) => {
+    console.log('📍 Selected vessel MMSI:', mmsi, position ? `at ${position.lat.toFixed(4)}, ${position.lon.toFixed(4)}` : '(no position)')
     setSelectedVesselMMSI(mmsi)
+    setSelectedVesselPosition(position || null)
   }
 
   // Handler for resetting highscore
@@ -217,6 +222,14 @@ export default function Home() {
   useEffect(() => {
     if (!data?.vessels) return
 
+    // DEBUG: Log geofence bounds
+    console.log('🟦 Geofence bounds:', {
+      latMin: geofenceBounds.latMin,
+      latMax: geofenceBounds.latMax,
+      lonMin: geofenceBounds.lonMin,
+      lonMax: geofenceBounds.lonMax,
+    })
+
     // Filter vessels within current geofence bounds
     const vesselsInBounds = data.vessels.filter(v =>
       v.latitude >= geofenceBounds.latMin &&
@@ -224,6 +237,17 @@ export default function Home() {
       v.longitude >= geofenceBounds.lonMin &&
       v.longitude <= geofenceBounds.lonMax
     )
+
+    console.log(`🚢 Total vessels in data: ${data.vessels.length}, In bounds: ${vesselsInBounds.length}`)
+
+    // Update last known positions for all vessels in bounds
+    vesselsInBounds.forEach(vessel => {
+      lastPositionsRef.current.set(vessel.mmsi, {
+        lat: vessel.latitude,
+        lon: vessel.longitude,
+        name: vessel.name,
+      })
+    })
 
     // Track stationary vessels (speed < 0.5 knots and in bounds)
     // Only update once per 30 seconds to avoid rapid counting
@@ -326,24 +350,30 @@ export default function Home() {
     entered.forEach(mmsi => {
       const vessel = vesselsInBounds.find(v => v.mmsi === mmsi)
       if (vessel) {
-        console.log('✅ ENTER geofence:', vessel.name, 'MMSI:', vessel.mmsi)
+        console.log('✅ ENTER geofence:', vessel.name, 'MMSI:', vessel.mmsi, 'at', vessel.latitude.toFixed(4), vessel.longitude.toFixed(4))
         newPassages.push({
           mmsi: vessel.mmsi,
           vesselName: vessel.name,
           timestamp: Date.now(),
           type: 'enter',
+          position: { lat: vessel.latitude, lon: vessel.longitude },
         })
       }
     })
 
-    // Log leaving vessels
+    // Log leaving vessels (use last known position)
     left.forEach(mmsi => {
-      console.log('❌ EXIT geofence: MMSI', mmsi)
+      const lastKnown = lastPositionsRef.current.get(mmsi)
+      const vesselName = lastKnown?.name || `MMSI ${mmsi}`
+      const position = lastKnown ? { lat: lastKnown.lat, lon: lastKnown.lon } : undefined
+
+      console.log('❌ EXIT geofence:', vesselName, 'MMSI:', mmsi, position ? `at ${position.lat.toFixed(4)}, ${position.lon.toFixed(4)}` : '(no position)')
       newPassages.push({
         mmsi,
-        vesselName: `MMSI ${mmsi}`, // We don't have the name for vessels that left
+        vesselName,
         timestamp: Date.now(),
         type: 'exit',
+        position,
       })
     })
 
@@ -445,6 +475,7 @@ export default function Home() {
         source={data.source}
         geofenceBounds={geofenceBounds}
         selectedVesselMMSI={selectedVesselMMSI}
+        selectedVesselPosition={selectedVesselPosition}
       />
       <GeofenceNotification notification={notification} />
       <GeofenceSettings bounds={geofenceBounds} onBoundsChange={handleBoundsChange} />

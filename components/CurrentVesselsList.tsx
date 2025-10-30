@@ -5,7 +5,7 @@ import type { AISVessel } from '@/types/ais'
 
 interface CurrentVesselsListProps {
   vessels: AISVessel[]
-  onVesselClick?: (mmsi: number) => void
+  onVesselClick?: (mmsi: number, position?: { lat: number; lon: number }) => void
 }
 
 export default function CurrentVesselsList({ vessels, onVesselClick }: CurrentVesselsListProps) {
@@ -116,7 +116,7 @@ export default function CurrentVesselsList({ vessels, onVesselClick }: CurrentVe
                 key={vessel.mmsi}
                 onClick={() => {
                   console.log('🔍 Clicked vessel:', vessel.name, 'MMSI:', vessel.mmsi)
-                  onVesselClick?.(vessel.mmsi)
+                  onVesselClick?.(vessel.mmsi, { lat: vessel.latitude, lon: vessel.longitude })
                 }}
                 style={{
                   background: 'white',

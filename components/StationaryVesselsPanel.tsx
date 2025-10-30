@@ -4,7 +4,7 @@ import type { StationaryRecord } from '@/types/passage'
 
 interface StationaryVesselsPanelProps {
   records: StationaryRecord[]
-  onVesselClick?: (mmsi: number) => void
+  onVesselClick?: (mmsi: number, position?: { lat: number; lon: number }) => void
 }
 
 function formatDuration(minutes: number): string {
@@ -106,7 +106,7 @@ export default function StationaryVesselsPanel({ records, onVesselClick }: Stati
               key={record.mmsi}
               onClick={() => {
                 console.log('🔍 Clicked stationary vessel:', record.vesselName, 'MMSI:', record.mmsi)
-                onVesselClick?.(record.mmsi)
+                onVesselClick?.(record.mmsi, record.lastPosition)
               }}
               style={{
                 background: index === 0 ? '#fef3c7' : index === 1 ? '#f3f4f6' : '#fef2f2',

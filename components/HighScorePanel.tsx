@@ -7,7 +7,7 @@ type TimeFilter = '24h' | '30d' | '1y'
 
 interface HighScorePanelProps {
   passages: VesselPassage[]
-  onVesselClick?: (mmsi: number) => void
+  onVesselClick?: (mmsi: number, position?: { lat: number; lon: number }) => void
   onReset?: () => void
 }
 
@@ -37,20 +37,28 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
     // Only count EXIT events (means vessel has completed a passage through the area)
     const exitPassages = recentPassages.filter(p => p.type === 'exit')
 
-    // Count passages per vessel
-    const statsMap = new Map<number, VesselStats>()
+    // Count passages per vessel and store last known position
+    interface VesselStatsWithPosition extends VesselStats {
+      lastPosition?: { lat: number; lon: number }
+    }
+    const statsMap = new Map<number, VesselStatsWithPosition>()
 
     exitPassages.forEach(passage => {
       const existing = statsMap.get(passage.mmsi)
       if (existing) {
         existing.passageCount++
-        existing.lastSeen = Math.max(existing.lastSeen, passage.timestamp)
+        // Update last seen and position if this passage is newer
+        if (passage.timestamp > existing.lastSeen) {
+          existing.lastSeen = passage.timestamp
+          existing.lastPosition = passage.position
+        }
       } else {
         statsMap.set(passage.mmsi, {
           mmsi: passage.mmsi,
           vesselName: passage.vesselName,
           passageCount: 1,
           lastSeen: passage.timestamp,
+          lastPosition: passage.position,
         })
       }
     })
@@ -274,8 +282,8 @@ export default function HighScorePanel({ passages, onVesselClick, onReset }: Hig
             <div
               key={stat.mmsi}
               onClick={() => {
-                console.log('🔍 Clicking vessel:', stat.vesselName, 'MMSI:', stat.mmsi)
-                onVesselClick?.(stat.mmsi)
+                console.log('🔍 Clicking vessel:', stat.vesselName, 'MMSI:', stat.mmsi, 'Position:', stat.lastPosition)
+                onVesselClick?.(stat.mmsi, stat.lastPosition)
               }}
               style={{
                 background: index < 3 ? '#fef3c7' : 'white',
