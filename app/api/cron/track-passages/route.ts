@@ -139,7 +139,32 @@ export async function GET() {
     }
 
     // Fetch current vessels in the area
-    const vessels = await fetchAISData(bounds)
+    const allVessels = await fetchAISData(bounds)
+
+    // CRITICAL: Filter vessels to ONLY include those strictly within bounds
+    // Barentswatch API may return vessels slightly outside the requested area
+    const vessels = allVessels.filter(v =>
+      v.latitude >= bounds.latMin &&
+      v.latitude <= bounds.latMax &&
+      v.longitude >= bounds.lonMin &&
+      v.longitude <= bounds.lonMax
+    )
+
+    console.log(`📡 Barentswatch returned ${allVessels.length} vessels, ${vessels.length} strictly within bounds`)
+    console.log(`🟦 Bounds: lat ${bounds.latMin}-${bounds.latMax}, lon ${bounds.lonMin}-${bounds.lonMax}`)
+
+    if (allVessels.length > vessels.length) {
+      const filtered = allVessels.filter(v =>
+        v.latitude < bounds.latMin ||
+        v.latitude > bounds.latMax ||
+        v.longitude < bounds.lonMin ||
+        v.longitude > bounds.lonMax
+      )
+      console.log(`⚠️ Filtered out ${filtered.length} vessels outside bounds:`)
+      filtered.forEach(v => {
+        console.log(`  - ${v.name} (${v.mmsi}) at ${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}`)
+      })
+    }
 
     if (vessels.length === 0) {
       console.log('No vessels found in area')
