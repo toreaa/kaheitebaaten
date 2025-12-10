@@ -29,6 +29,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# project status (local only)
+PROJECT_STATUS.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
